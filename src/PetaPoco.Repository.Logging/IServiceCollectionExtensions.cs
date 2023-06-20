@@ -23,7 +23,7 @@ public static class IServiceCollectionExtensions
         return services;
     }
 
-    public static Abstractions.ICrudRepositoryServiceCollection AddCreateUpdateDateStamper(this Abstractions.ICrudRepositoryServiceCollection services, Logging.Options.CrudActionLoggerOptions options)
+    public static Abstractions.ICrudRepositoryServiceCollection AddEntityCrudLogging(this Abstractions.ICrudRepositoryServiceCollection services, Logging.Options.CrudActionLoggerOptions options)
     {
         services.Add(new Logging.CrudActionLogger(options));
 

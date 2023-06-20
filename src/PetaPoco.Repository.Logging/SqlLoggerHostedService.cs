@@ -32,39 +32,43 @@ public class SqlLoggerHostedService : Microsoft.Extensions.Hosting.IHostedServic
         return Task.CompletedTask;
     }
 
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        _databaseFactory.DatabaseInstantiated -= this._databaseFactory_DatabaseInstantiated;
+        return Task.CompletedTask;
+    }
+
     private void _databaseFactory_DatabaseInstantiated(object sender, DatabaseInstantiatedEventArgs e)
     {
         var db = e.Database;
-        db.CommandExecuted += this.Db_CommandExecuted;
+        db.CommandExecuted += this.Db_CommandExecuted;//know way to know when the db dies, so we can't unregister :(
     }
 
     private void Db_CommandExecuted(object sender, DbCommandEventArgs e)
     {
         var cmd = e.Command;
 
-        if (_logger?.IsEnabled(LogLevel.Debug) == true)
+        //enable check becaue we don't want to waste time getting arguments together if we aren't even going to log 
+        if (_logger?.IsEnabled(_petaPocoLoggingConfiguration.SqlLogLevel) == true)
         {
             string sql = cmd.CommandText;
             try
             {
                 var parameters = cmd.Parameters.Cast<IDataParameter>().ToList();
-                string sqlArgNames = string.Join(",", parameters.Select(x => "{" + x.ParameterName + "}").ToArray());
-                //arg values always fail to log, throwing an exception, so i'm excluding them
-                //object[] sqlArgValues = paramerters.Select(x => x?.Value).ToArray();
-                //System.Diagnostics.Debug.WriteLine($"Executing Sql:\r\n{sql}\r\n with args:\r\n{sqlArgNames}", sqlArgValues);
-                //_logger?.LogDebug($"Executing Sql:\r\n{sql}\r\n with args:\r\n{sqlArgNames}", sqlArgValues);
-                _logger.Log(_petaPocoLoggingConfiguration.SqlLogLevel, "Executing Sql:\r\n{sql}\r\n with args:\r\n{sqlArgNames}", sql, sqlArgNames);
-            }
-            catch
-            {
+                object[] sqlArgValues = parameters.Select(x => x?.Value).ToArray();
 
+                //this try catch is because i've seen some weird instances where the sqlArgValues fail to log, so if that happens, we'll re-log without the values
+                try
+                {
+                    _logger.Log(_petaPocoLoggingConfiguration.SqlLogLevel, "Executing Sql:\r\n{sql}\r\n with args:\r\n{sqlArg}", sql, sqlArgValues);
+                }
+                catch
+                {
+                    _logger.Log(_petaPocoLoggingConfiguration.SqlLogLevel, "Executing Sql:\r\n{sql}\r\n with args:\r\n-args failed to log-", sql);
+                }
             }
+            catch { }//i really don't think this will happen, but i don't want issues with logging to break things
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        _databaseFactory.DatabaseInstantiated -= this._databaseFactory_DatabaseInstantiated;
-        return Task.CompletedTask;
-    }
 }
