@@ -2,7 +2,7 @@
 using PetaPoco.Repository.Logging.Options;
 using System;
 
-namespace PetaPoco.Repository
+namespace PetaPoco.Repository.Logging
 {
     public static class IServiceCollectionExtensions
     {
@@ -15,6 +15,11 @@ namespace PetaPoco.Repository
             if (cfg.LogFullEntityCrud)
             {
                 cfg.CrudRepositoryServiceCollection.Add(new Logging.CrudActionLogger(new CrudActionLoggerOptions() { EntityLoggingEnabled = true }));
+            }
+
+            if (cfg.LogSqlStatements)
+            {
+                services.AddHostedService<SqlLoggerHostedService>();
             }
 
             return services;
