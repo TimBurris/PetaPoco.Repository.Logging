@@ -1,7 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using PetaPoco.Repository.Abstractions;
 using PetaPoco.Repository.Logging.Options;
-using System;
 
 namespace PetaPoco.Repository.Logging
 {
@@ -9,12 +9,11 @@ namespace PetaPoco.Repository.Logging
     public class CrudActionLogger : ICrudRepositoryService
     {
         private readonly CrudActionLoggerOptions _options;
-        private readonly ILogger<CrudActionLogger> _logger;
-
-        public CrudActionLogger(CrudActionLoggerOptions options, ILogger<CrudActionLogger> logger)
+        private readonly ILoggerFactory _loggerFactory;
+        public CrudActionLogger(CrudActionLoggerOptions options)
         {
             _options = options;
-            _logger = logger;
+            _loggerFactory = CrudActionLoggerOptions.ServiceProvider.GetService<ILoggerFactory>();
         }
 
         #region ICrudRepositoryService
@@ -33,7 +32,8 @@ namespace PetaPoco.Repository.Logging
 
         public void BeforeAdd<T, TPrimaryKeyType>(ICrudRepository<T, TPrimaryKeyType> repository, T entity)
         {
-            this.LogEntityAction(action: "Add", entity: entity);
+            var logger = _loggerFactory.CreateLogger(repository.GetType());
+            this.LogEntityAction(action: "Add", entity: entity, logger);
         }
 
         public void BeforeRemove<T, TPrimaryKeyType>(ICrudRepository<T, TPrimaryKeyType> repository, TPrimaryKeyType entityId)
@@ -42,23 +42,25 @@ namespace PetaPoco.Repository.Logging
             if (_options.EntityLoggingEnabled)
             {
                 var entity = repository.FindById(entityId);
+                var logger = _loggerFactory.CreateLogger(repository.GetType());
 
-                this.LogEntityAction(action: "Remove", entity: entity);
+                this.LogEntityAction(action: "Remove", entity: entity, logger);
             }
         }
 
         public void BeforeUpdate<T, TPrimaryKeyType>(ICrudRepository<T, TPrimaryKeyType> repository, T entity)
         {
-            this.LogEntityAction(action: "Update", entity: entity);
+            var logger = _loggerFactory.CreateLogger(repository.GetType());
+            this.LogEntityAction(action: "Update", entity: entity, logger);
         }
 
         #endregion
 
-        private void LogEntityAction<T>(string action, T entity)
+        private void LogEntityAction<T>(string action, T entity, ILogger logger)
         {
-            if (_options.EntityLoggingEnabled && _logger != null && _logger.IsEnabled(LogLevel.Debug))
+            if (_options.EntityLoggingEnabled && logger != null && logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("Perform {action} on {entityType} with values {entityJson}", action, typeof(T).ToString(), SerializeForLogging(entity));
+                logger.LogDebug("Perform {action} on {entityType} with values {entityJson}", action, typeof(T).ToString(), SerializeForLogging(entity));
             }
         }
 
