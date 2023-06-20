@@ -9,12 +9,12 @@
         /// </summary>
         /// <remarks>Requires assignment of <see cref="CrudRepositoryServiceCollection"/></remarks>
         public bool LogFullEntityCrud { get; set; } = true;
-        Microsoft.Extensions.Logging.LogLevel EntityCrudLogLevel { get; set; } = Microsoft.Extensions.Logging.LogLevel.Debug;
+        public Microsoft.Extensions.Logging.LogLevel EntityCrudLogLevel { get; set; } = Microsoft.Extensions.Logging.LogLevel.Debug;
 
         /// <summary>
         /// when true, every SQL Statement executed by Databases of the configured <see cref="Abstractions.IDatabaseFactory"/> will be logged
         /// </summary>
         public bool LogSqlStatements { get; set; } = true;
-        Microsoft.Extensions.Logging.LogLevel SqlLogLevel { get; set; } = Microsoft.Extensions.Logging.LogLevel.Debug;
+        public Microsoft.Extensions.Logging.LogLevel SqlLogLevel { get; set; } = Microsoft.Extensions.Logging.LogLevel.Debug;
     }
 }
