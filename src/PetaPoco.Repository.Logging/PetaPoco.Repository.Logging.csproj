@@ -1,8 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
+    <Authors>Tim Burris</Authors>
+    <Description>Extends PetaPoco.Repository to allow logging sql statements as well as logging full json representations of the entities</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/TimBurris/PetaPoco.Repository.CreateUpdateStamper</PackageProjectUrl>
+    <PackageTags>Peta Poco Peta-Poco PetaPoco Repository Repository-Pattern microorm Micro-ORM ORM Loger ILogger Logging</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
