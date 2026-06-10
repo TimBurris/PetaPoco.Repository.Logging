@@ -3,7 +3,9 @@ using System.Threading.Tasks;
 using System.Threading;
 using PetaPoco.Repository.Abstractions;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace PetaPoco.Repository.Logging;
 
@@ -12,6 +14,12 @@ public class SqlLoggerHostedService : Microsoft.Extensions.Hosting.IHostedServic
     private readonly ILogger<SqlLoggerHostedService> _logger;
     private readonly IDatabaseFactory _databaseFactory;
     private readonly PetaPocoLoggingConfiguration _petaPocoLoggingConfiguration;
+
+    //PetaPoco has no duration on its CommandExecuted event, so we time from CommandExecuting to
+    //CommandExecuted ourselves. Keyed by the command instance (the same IDbCommand is passed to both
+    //events). ConditionalWeakTable means a command that never completes (e.g. it threw) is collected
+    //with its key and can never leak.
+    private readonly ConditionalWeakTable<IDbCommand, Stopwatch> _commandTimers = new ConditionalWeakTable<IDbCommand, Stopwatch>();
 
     public SqlLoggerHostedService(ILogger<SqlLoggerHostedService> logger, Abstractions.IDatabaseFactory databaseFactory, PetaPocoLoggingConfiguration petaPocoLoggingConfiguration)
     {
@@ -41,14 +49,39 @@ public class SqlLoggerHostedService : Microsoft.Extensions.Hosting.IHostedServic
     private void _databaseFactory_DatabaseInstantiated(object sender, DatabaseInstantiatedEventArgs e)
     {
         var db = e.Database;
+        db.CommandExecuting += this.Db_CommandExecuting;
         db.CommandExecuted += this.Db_CommandExecuted;//know way to know when the db dies, so we can't unregister :(
+    }
+
+    private void Db_CommandExecuting(object sender, DbCommandEventArgs e)
+    {
+        //enable check because we don't want to waste time timing if we aren't even going to log
+        if (_logger?.IsEnabled(_petaPocoLoggingConfiguration.SqlLogLevel) != true)
+            return;
+
+        var cmd = e.Command;
+        if (cmd == null)
+            return;
+
+        //start the timer for this command; it's read back in Db_CommandExecuted
+        _commandTimers.Remove(cmd);//defensive: a reused command instance shouldn't carry a stale timer
+        _commandTimers.Add(cmd, Stopwatch.StartNew());
     }
 
     private void Db_CommandExecuted(object sender, DbCommandEventArgs e)
     {
         var cmd = e.Command;
 
-        //enable check becaue we don't want to waste time getting arguments together if we aren't even going to log 
+        //stop/remove the timer regardless of whether we end up logging, so nothing lingers
+        long? elapsedMs = null;
+        if (cmd != null && _commandTimers.TryGetValue(cmd, out var stopwatch))
+        {
+            stopwatch.Stop();
+            elapsedMs = stopwatch.ElapsedMilliseconds;
+            _commandTimers.Remove(cmd);
+        }
+
+        //enable check becaue we don't want to waste time getting arguments together if we aren't even going to log
         if (_logger?.IsEnabled(_petaPocoLoggingConfiguration.SqlLogLevel) == true)
         {
             string sql = cmd.CommandText;
@@ -60,11 +93,11 @@ public class SqlLoggerHostedService : Microsoft.Extensions.Hosting.IHostedServic
                 //this try catch is because i've seen some weird instances where the sqlArgValues fail to log, so if that happens, we'll re-log without the values
                 try
                 {
-                    _logger.Log(_petaPocoLoggingConfiguration.SqlLogLevel, "Executing Sql:\r\n{sql}\r\n with args:\r\n{sqlArg}", sql, sqlArgValues);
+                    _logger.Log(_petaPocoLoggingConfiguration.SqlLogLevel, "Executed Sql in {elapsedMs}ms:\r\n{sql}\r\n with args:\r\n{sqlArg}", elapsedMs, sql, sqlArgValues);
                 }
                 catch
                 {
-                    _logger.Log(_petaPocoLoggingConfiguration.SqlLogLevel, "Executing Sql:\r\n{sql}\r\n with args:\r\n-args failed to log-", sql);
+                    _logger.Log(_petaPocoLoggingConfiguration.SqlLogLevel, "Executed Sql in {elapsedMs}ms:\r\n{sql}\r\n with args:\r\n-args failed to log-", elapsedMs, sql);
                 }
             }
             catch { }//i really don't think this will happen, but i don't want issues with logging to break things
