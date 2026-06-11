@@ -29,16 +29,21 @@ public class SqlLoggerHostedService : Microsoft.Extensions.Hosting.IHostedServic
     }
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_petaPocoLoggingConfiguration.LogSqlStatements)
-            return Task.CompletedTask;
-
-        if (_logger == null || !_logger.IsEnabled(_petaPocoLoggingConfiguration.SqlLogLevel))
-            return Task.CompletedTask;
-
+        //IMPORTANT: subscription is a one-time startup action, so we deliberately do NOT gate it on
+        //LogSqlStatements or on the logger level here. Previously this method returned early when logging
+        //was disabled at startup, which meant the hooks were never attached and logging could never be
+        //turned on later. We always attach the hooks (cheap) and decide per-command whether to actually
+        //emit (see ShouldLog), so logging can be toggled at runtime via LogSqlStatements.
         _databaseFactory.DatabaseInstantiated += this._databaseFactory_DatabaseInstantiated;
 
         return Task.CompletedTask;
     }
+
+    //Single place that decides whether a statement is logged right now. LogSqlStatements is the live
+    //runtime switch; the IsEnabled check ensures we still skip work when the logger's level is disabled.
+    private bool ShouldLog()
+        => _petaPocoLoggingConfiguration.LogSqlStatements
+           && _logger?.IsEnabled(_petaPocoLoggingConfiguration.SqlLogLevel) == true;
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
@@ -56,7 +61,7 @@ public class SqlLoggerHostedService : Microsoft.Extensions.Hosting.IHostedServic
     private void Db_CommandExecuting(object sender, DbCommandEventArgs e)
     {
         //enable check because we don't want to waste time timing if we aren't even going to log
-        if (_logger?.IsEnabled(_petaPocoLoggingConfiguration.SqlLogLevel) != true)
+        if (!ShouldLog())
             return;
 
         var cmd = e.Command;
@@ -82,7 +87,7 @@ public class SqlLoggerHostedService : Microsoft.Extensions.Hosting.IHostedServic
         }
 
         //enable check becaue we don't want to waste time getting arguments together if we aren't even going to log
-        if (_logger?.IsEnabled(_petaPocoLoggingConfiguration.SqlLogLevel) == true)
+        if (ShouldLog())
         {
             string sql = cmd.CommandText;
             try

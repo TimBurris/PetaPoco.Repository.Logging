@@ -15,10 +15,10 @@ public static class IServiceCollectionExtensions
 
         services.AddSingleton(cfg);
 
-        if (cfg.LogSqlStatements)
-        {
-            services.AddHostedService<SqlLoggerHostedService>();
-        }
+        //Always register the SQL logger. It subscribes to command events at startup and decides per-command
+        //whether to emit based on the live PetaPocoLoggingConfiguration.LogSqlStatements toggle, so logging
+        //can be turned on/off at runtime. When off, the per-command cost is a single volatile bool check.
+        services.AddHostedService<SqlLoggerHostedService>();
 
         return services;
     }
